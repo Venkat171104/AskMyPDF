@@ -1,0 +1,84 @@
+import streamlit as st
+import fitz  # PyMuPDF
+import re
+import tempfile
+
+st.set_page_config(page_title="📄 PDF Explorer", layout="wide")
+st.title("📄 PDF Analyzer & Summary")
+
+uploaded_file = st.file_uploader("📤 Upload your PDF", type="pdf")
+
+if uploaded_file:
+    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+        tmp_file.write(uploaded_file.read())
+        file_path = tmp_file.name
+
+    doc = fitz.open(file_path)
+    st.success(f"✅ PDF loaded: {uploaded_file.name} with {len(doc)} pages")
+
+    st.sidebar.title("📌 Select Action")
+    action = st.sidebar.radio("Choose one", [
+        "Show PDF Info",
+        "Preview First 3 Pages",
+        "Search Keyword",
+        "Extract Specific Page",
+        "Summarize PDF"
+    ])
+
+    if action == "Show PDF Info":
+        st.subheader("📊 PDF Summary")
+        st.write(f"**Total Pages**: {len(doc)}")
+        try:
+            st.write(f"**File Size**: {round(doc.file_size / 1024, 2)} KB")
+        except:
+            st.write("**File Size**: Not available")
+
+        meta = doc.metadata
+        if meta:
+            st.markdown("### Metadata")
+            for key, value in meta.items():
+                if value:
+                    st.write(f"- **{key.capitalize()}**: {value}")
+        else:
+            st.warning("No metadata found.")
+
+    elif action == "Preview First 3 Pages":
+        st.subheader("📖 Preview First 3 Pages")
+        for i in range(min(3, len(doc))):
+            text = doc[i].get_text()
+            st.markdown(f"### Page {i+1}")
+            st.text(text if text else "[Empty Page]")
+
+    elif action == "Search Keyword":
+        st.subheader("🔍 Search for a Keyword")
+        keyword = st.text_input("Enter keyword:")
+        if keyword:
+            found = False
+            for i, page in enumerate(doc):
+                text = page.get_text()
+                if keyword.lower() in text.lower():
+                    st.success(f"✅ Found on Page {i+1}")
+                    found = True
+            if not found:
+                st.error("❌ Keyword not found.")
+
+    elif action == "Extract Specific Page":
+        st.subheader("📃 Extract Page")
+        page = st.number_input("Enter page number:", min_value=1, max_value=len(doc), value=1)
+        if st.button("Extract"):
+            text = doc[page - 1].get_text()
+            st.text_area(f"Content of Page {page}", text if text else "No readable text", height=300)
+
+    elif action == "Summarize PDF":
+        st.subheader("🧠 PDF Summary (First Few Sentences)")
+        all_text = ""
+        for i in range(len(doc)):
+            all_text += doc[i].get_text() + "\n"
+            if len(all_text) > 3000:
+                break
+        if all_text.strip():
+            sentences = re.split(r'(?<=[.!?]) +', all_text)
+            summary = " ".join(sentences[:5])
+            st.write(summary)
+        else:
+            st.error("❌ Could not extract text for summary.")
